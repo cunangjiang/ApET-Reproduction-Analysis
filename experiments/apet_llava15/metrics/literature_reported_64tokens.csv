@@ -1,0 +1,7 @@
+Method,Avg Visual Tokens,GQA (%),POPE (%),Source
+ToMe,64,48.6,52.5,ApET Table 1 (reported)
+FastV,64,46.1,48.0,ApET Table 1 (reported)
+SparseVLM,64,52.7,75.1,ApET Table 1 (reported)
+PDrop,64,47.5,55.9,ApET Table 1 (reported)
+VisionZip,64,55.1,77.0,ApET Table 1 (reported)
+ApET,64,56.9,84.4,ApET Table 1 (reported)

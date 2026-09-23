@@ -1420,6 +1420,69 @@ class LlamaModel(LlamaPreTrainedModel):
                 image_embeds = features[i][image_index:text_index, :]
                 N, D = image_embeds.shape
 
+                # --------------------------------------------------
+                # Naive Random Pruning baseline at the middle layer.
+                #
+                # Randomly retain exactly keep_length[i] image tokens.
+                # No approximation-error computation or token merging.
+                # --------------------------------------------------
+                token_selection_method = getattr(
+                    self,
+                    "token_selection_method",
+                    "apet"
+                )
+
+                if token_selection_method == "random_prune":
+                    keep_n = keep_length[i]
+
+                    random_indices = torch.randperm(
+                        N,
+                        device=image_embeds.device
+                    )[:keep_n]
+
+                    # Preserve the original sequence order.
+                    random_indices = torch.sort(
+                        random_indices,
+                        dim=0
+                    )[0]
+
+                    assert random_indices.numel() == keep_n
+
+                    new_input_embeds = torch.cat(
+                        [
+                            features[i][:image_index, :],
+                            image_embeds[random_indices],
+                            features[i][text_index:, :]
+                        ],
+                        dim=0
+                    )
+
+                    new_labels = torch.cat(
+                        [
+                            labels[i][:image_index],
+                            labels[i][random_indices],
+                            labels[i][text_index:]
+                        ],
+                        dim=0
+                    )
+
+                    new_attention_mask = torch.cat(
+                        [
+                            attention_mask[i][:image_index],
+                            attention_mask[i][random_indices],
+                            attention_mask[i][text_index:]
+                        ],
+                        dim=0
+                    )
+
+                    features_list.append(new_input_embeds)
+                    attention_mask_list.append(
+                        new_attention_mask
+                    )
+                    labels_list.append(new_labels)
+
+                    continue
+
                 if selection_method == 'dpc':
                     # Density Peak Clustering
                     seed_features = cluster_and_merge(image_embeds.unsqueeze(0), k).squeeze(0)

@@ -1,0 +1,4 @@
+method,avg_visual_tokens,gqa_accuracy_pct,pope_f1_pct
+Vanilla,576,61.93,85.91996787280682
+RandomPrune,64,55.06,78.74089414223032
+ApET,64,57.31,84.69014069479988

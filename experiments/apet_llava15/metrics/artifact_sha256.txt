@@ -1,0 +1,17 @@
+f9e653501413991248613d8c61631267b41c1bf1571b1cafa29d6841325dcfca  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/pope/answers/pope_vanilla_576_s42.jsonl
+3c29ffee30bd1b4ab4b54b486aac78cff9384dd312f2410d6a814074d510f4b0  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/pope/answers/pope_apet_192_s42.jsonl
+923d24b07e145367c937722317dcc9f957bcc7d9ec21a70d0a4c18f82ba3580f  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/pope/answers/pope_apet_128_s42.jsonl
+619ff2e8dc0bbd079c135a4b23e69efb18685b5aed9c87d9d77fc380485d8398  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/pope/answers/pope_apet_64_s42.jsonl
+6e49a5fe38d282ba6e3b90df91517294bd9f2c54e18964144f5c01a2bed71c61  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/answers/gqa_apet_128_s42.jsonl
+98e800d400c0e820dd6063bb20baa3f62a47c1e0cf53e9e5eb43fa77ff405c60  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/answers/gqa_apet_192_s42.jsonl
+28184e320f2a5192c54a7f280fd3d425b139fefbeb2018e2175c217a8e6a7312  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/answers/gqa_apet_64_s42.jsonl
+d235c69d2b8622b3d1eba327c93ef8c20a42de1a5368ae21ead370b08ee4d948  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/answers/gqa_vanilla_576_s42.jsonl
+e93aabfecb46d3f57b914f2c37acc4e223cfce5b5fb18025ed26698b703bc4e9  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/predictions/gqa_apet_128_s42.json
+155e39e57606c63429cd358645f0adb6ac53ef7aa4c89f2fd653042e301de8e8  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/predictions/gqa_apet_192_s42.json
+505640007d95a42df798330d60800b1f7664cf14983f3a8011640953c6ca50fe  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/predictions/gqa_apet_64_s42.json
+16ff6630946360cdfdfc944823706f4ead671a879e506445e657f3034552fbb8  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/predictions/gqa_vanilla_576_s42.json
+c16df71235a291953abf36d774da9aebfb673e53e12ce9289624123843f2b4d8  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/eval/gqa_apet_128_s42.txt
+54246b03bbf4a059e0b8b73544f4f46a6d3039f8a9a2c1c9c64556804c92dd62  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/eval/gqa_apet_192_s42.txt
+a7042b48324a21218cfa86d43cd43c2ef68f8f4552a5a9fad7853205a85884fd  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/eval/gqa_apet_64_s42.txt
+c8e66cb56beff5cffef9eb108dd68669dba1a283c51ac48905b24cfdb6064c4d  /media/root/f34190af-0449-4d32-87e3-0a55e032ed3b/gts/VLM_project/ApET/experiments/apet_llava15/gqa/eval/gqa_vanilla_576_s42.txt
+b79eed436052ee35cab61c78b468a537969cc9adeae44c8d502cd4dea152a0cd  data/eval/pope/efficiency/pope_eff_520_s42.jsonl

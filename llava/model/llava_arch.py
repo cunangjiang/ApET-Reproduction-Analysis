@@ -202,6 +202,59 @@ class LlavaMetaForCausalLM(ABC):
             image_features = self.get_model().mm_projector(image_features)
             return image_features, index_mask
 
+        # ---------------------------------------------------------
+        # Naive Random Pruning baseline
+        #
+        # Randomly retain exactly visual_token_num unique visual
+        # tokens. No FPS, reconstruction error, ranking, or merging.
+        # The retained indices are sorted to preserve original token
+        # order.
+        # ---------------------------------------------------------
+        token_selection_method = getattr(
+            self.get_model(),
+            "token_selection_method",
+            "apet"
+        )
+
+        if token_selection_method == "random_prune":
+            random_indices = torch.stack([
+                torch.randperm(
+                    N,
+                    device=image_features.device
+                )[:visual_token_num]
+                for _ in range(B)
+            ], dim=0)
+
+            random_indices = torch.sort(
+                random_indices,
+                dim=1
+            )[0]
+
+            index_mask = torch.zeros(
+                B,
+                N,
+                dtype=torch.bool,
+                device=image_features.device
+            )
+
+            index_mask.scatter_(
+                1,
+                random_indices,
+                True
+            )
+
+            assert torch.all(
+                index_mask.sum(dim=1) == visual_token_num
+            )
+
+            # Keep the same projector placement as the original
+            # repository for a fair implementation-level comparison.
+            image_features = self.get_model().mm_projector(
+                image_features
+            )
+
+            return image_features, index_mask
+
         k = self.model.basis_token_num
 
         if selection_method == 'dpc':

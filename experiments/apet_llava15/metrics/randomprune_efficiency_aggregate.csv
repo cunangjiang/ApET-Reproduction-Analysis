@@ -1,0 +1,2 @@
+setting,avg_visual_tokens,e2e_mean_ms,e2e_std_ms,e2e_speedup_mean,e2e_speedup_std,prefill_mean_ms,prefill_std_ms,prefill_speedup_mean,prefill_speedup_std,throughput_mean,throughput_std,peak_allocated_gb
+RandomPrune-64,64,103.09559560070436,0.28454097195385325,2.052667554983557,0.007024370359461067,47.84461540985108,0.16728085491354905,3.241720105379619,0.014021174216498514,9.699784597350577,0.026728641523450374,15.040469646453857

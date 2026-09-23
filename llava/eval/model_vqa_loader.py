@@ -115,11 +115,16 @@ def eval_model(args):
         model.model.image_token_list = eval(args.image_token_list)
         model.model.image_token_list.insert(0, args.visual_token_num)
         model.model.visual_id = 0
+        model.model.token_selection_method = args.token_selection_method
     if 'plain' in model_name and 'finetune' not in model_name.lower() and 'mmtag' not in args.conv_mode:
         args.conv_mode = args.conv_mode + '_mmtag'
         print(f'It seems that this is a plain model, but it is not using a mmtag prompt, auto switching to {args.conv_mode}.')
 
     data_loader = create_data_loader(questions, args.image_folder, tokenizer, image_processor, model.config)
+
+    # Reproducibility for FPS in formal experiments
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
 
     
     counter = 0
@@ -172,6 +177,14 @@ if __name__ == "__main__":
     parser.add_argument("--llm_pruning", action='store_true')
     parser.add_argument("--visual_token_num", type=int, default=576)
     parser.add_argument("--basis_token_num", type=int, default=10)
+    parser.add_argument(
+        "--token_selection_method",
+        type=str,
+        default="apet",
+        choices=["apet", "random_prune"],
+        help="Visual token compression method."
+    )
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     eval_model(args)

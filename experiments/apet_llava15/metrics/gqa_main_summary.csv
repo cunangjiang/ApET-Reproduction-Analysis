@@ -1,0 +1,5 @@
+run_id,method,avg_visual_tokens,vision_stage_tokens,layer16_tokens,gqa_accuracy_pct
+gqa_vanilla_576_s42,Vanilla,576,576,576,61.93
+gqa_apet_192_s42,ApET,192,288,96,59.95
+gqa_apet_128_s42,ApET,128,192,64,59.41
+gqa_apet_64_s42,ApET,64,96,32,57.31

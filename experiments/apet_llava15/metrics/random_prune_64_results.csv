@@ -1,0 +1,2 @@
+method,avg_visual_tokens,token_retention_pct,vision_stage_tokens,layer16_tokens,gqa_accuracy_pct,pope_f1_pct,pope_accuracy_pct,yes_ratio_pct
+RandomPrune,64,11.11111111111111,96,32,55.06,78.74089414223032,81.47445589919818,36.58831615120275

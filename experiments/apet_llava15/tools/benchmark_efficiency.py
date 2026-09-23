@@ -1,0 +1,414 @@
+import argparse
+import csv
+import json
+import os
+import statistics
+import time
+from pathlib import Path
+import sys
+
+# Add the ApET repository root to Python's module search path.
+# benchmark_efficiency.py is located at:
+# ApET/experiments/apet_llava15/tools/benchmark_efficiency.py
+APET_ROOT = Path(__file__).resolve().parents[3]
+if str(APET_ROOT) not in sys.path:
+    sys.path.insert(0, str(APET_ROOT))
+
+import torch
+from PIL import Image
+from tqdm import tqdm
+
+from llava.constants import (
+    IMAGE_TOKEN_INDEX,
+    DEFAULT_IMAGE_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IM_END_TOKEN,
+)
+from llava.conversation import conv_templates
+from llava.model.builder import load_pretrained_model
+from llava.mm_utils import (
+    tokenizer_image_token,
+    process_images,
+    get_model_name_from_path,
+)
+from llava.utils import disable_torch_init
+
+
+def percentile(xs, q):
+    xs = sorted(xs)
+    if not xs:
+        return float("nan")
+    pos = (len(xs) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(xs) - 1)
+    frac = pos - lo
+    return xs[lo] * (1 - frac) + xs[hi] * frac
+
+
+def main(args):
+    disable_torch_init()
+
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+    questions = [
+        json.loads(x)
+        for x in open(args.question_file)
+        if x.strip()
+    ]
+
+    expected = args.warmup + args.measure
+    if len(questions) < expected:
+        raise RuntimeError(
+            f"Need at least {expected} questions, got {len(questions)}"
+        )
+
+    questions = questions[:expected]
+
+    model_path = os.path.expanduser(args.model_path)
+    model_name = get_model_name_from_path(model_path)
+
+    layer_list = eval(args.layer_list)
+    llm_pruning = layer_list is not None
+
+    tokenizer, model, image_processor, context_len = load_pretrained_model(
+        model_path,
+        args.model_base,
+        model_name,
+        llm_pruning,
+        use_flash_attn=False,
+        visual_token_num=args.visual_token_num,
+        selected_indices=[],
+    )
+
+    if type(model).__name__ == "LlavaLlamaForCausalLM_X":
+        model.model.basis_token_num = args.basis_token_num
+        model.model.layer_list = layer_list
+        model.model.image_token_list = eval(args.image_token_list)
+        model.model.image_token_list.insert(
+            0, args.visual_token_num
+        )
+        model.model.visual_id = 0
+        model.model.token_selection_method = args.token_selection_method
+
+    model.eval()
+
+    # ---------------------------------------------------------
+    # Capture the FIRST model forward inside generate().
+    #
+    # IMPORTANT:
+    # Do NOT replace model.forward here. Hugging Face GenerationMixin
+    # inspects the forward() signature to determine whether the model
+    # accepts attention_mask. Replacing forward with (*args, **kwargs)
+    # can therefore break generation.
+    #
+    # Instead, use PyTorch forward hooks so the original model.forward
+    # remains completely unchanged.
+    # ---------------------------------------------------------
+    timing_state = {
+        "capture": False,
+        "awaiting_end": False,
+        "start_event": None,
+        "end_event": None,
+    }
+
+    def first_forward_pre_hook(module, inputs):
+        if timing_state["capture"]:
+            timing_state["capture"] = False
+            timing_state["awaiting_end"] = True
+
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+
+            timing_state["start_event"] = start_event
+            timing_state["end_event"] = end_event
+
+            start_event.record()
+
+    def first_forward_post_hook(module, inputs, output):
+        if timing_state["awaiting_end"]:
+            timing_state["end_event"].record()
+            timing_state["awaiting_end"] = False
+
+    prefill_pre_handle = model.register_forward_pre_hook(
+        first_forward_pre_hook
+    )
+
+    prefill_post_handle = model.register_forward_hook(
+        first_forward_post_hook
+    )
+
+    rows = []
+
+    iterator = tqdm(
+        enumerate(questions),
+        total=len(questions),
+        desc=args.run_id,
+    )
+
+    for index, line in iterator:
+        image_file = line["image"]
+        qs = line["text"]
+
+        if model.config.mm_use_im_start_end:
+            full_qs = (
+                DEFAULT_IM_START_TOKEN
+                + DEFAULT_IMAGE_TOKEN
+                + DEFAULT_IM_END_TOKEN
+                + "\n"
+                + qs
+            )
+        else:
+            full_qs = DEFAULT_IMAGE_TOKEN + "\n" + qs
+
+        conv = conv_templates[args.conv_mode].copy()
+        conv.append_message(conv.roles[0], full_qs)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+
+        image_path = os.path.join(
+            args.image_folder,
+            image_file,
+        )
+
+        image_pil = Image.open(image_path).convert("RGB")
+
+        image_tensor, images_pil = process_images(
+            [image_pil],
+            image_processor,
+            model.config,
+        )
+
+        image_tensor = image_tensor[0].unsqueeze(0)
+        image_sizes = [image_pil.size]
+
+        input_ids = tokenizer_image_token(
+            prompt,
+            tokenizer,
+            IMAGE_TOKEN_INDEX,
+            return_tensors="pt",
+        ).unsqueeze(0)
+
+        input_ids = input_ids.to(
+            device="cuda",
+            non_blocking=True,
+        )
+
+        image_tensor = image_tensor.to(
+            dtype=torch.float16,
+            device="cuda",
+            non_blocking=True,
+        )
+
+        # Ensure preprocessing/data transfer is NOT included
+        # in the generation timing.
+        torch.cuda.synchronize()
+
+        is_warmup = index < args.warmup
+
+        if not is_warmup:
+            torch.cuda.reset_peak_memory_stats()
+
+            baseline_allocated = (
+                torch.cuda.memory_allocated()
+            )
+
+            baseline_reserved = (
+                torch.cuda.memory_reserved()
+            )
+
+        timing_state["capture"] = True
+        timing_state["awaiting_end"] = False
+        timing_state["start_event"] = None
+        timing_state["end_event"] = None
+
+        torch.cuda.synchronize()
+        wall_start = time.perf_counter()
+
+        with torch.inference_mode():
+            output_ids = model.generate(
+                input_ids,
+                images=image_tensor,
+                image_sizes=image_sizes,
+                do_sample=False,
+                num_beams=1,
+                max_new_tokens=args.max_new_tokens,
+                use_cache=True,
+            )
+
+        torch.cuda.synchronize()
+        wall_end = time.perf_counter()
+
+        if (
+            timing_state["start_event"] is None
+            or timing_state["end_event"] is None
+        ):
+            raise RuntimeError(
+                "Failed to capture first forward/prefill."
+            )
+
+        prefill_ms = timing_state["start_event"].elapsed_time(
+            timing_state["end_event"]
+        )
+
+        if is_warmup:
+            continue
+
+        generation_ms = (wall_end - wall_start) * 1000.0
+
+        peak_allocated = torch.cuda.max_memory_allocated()
+        peak_reserved = torch.cuda.max_memory_reserved()
+
+        dynamic_allocated = (
+            peak_allocated - baseline_allocated
+        )
+
+        dynamic_reserved = (
+            peak_reserved - baseline_reserved
+        )
+
+        rows.append({
+            "sample_index": index - args.warmup,
+            "question_id": line["question_id"],
+            "generation_ms": generation_ms,
+            "prefill_ms": prefill_ms,
+            "peak_allocated_gb": peak_allocated / (1024 ** 3),
+            "peak_reserved_gb": peak_reserved / (1024 ** 3),
+            "dynamic_peak_allocated_gb":
+                dynamic_allocated / (1024 ** 3),
+            "dynamic_peak_reserved_gb":
+                dynamic_reserved / (1024 ** 3),
+        })
+
+    output_prefix = Path(args.output_prefix)
+    output_prefix.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    sample_csv = Path(str(output_prefix) + "_samples.csv")
+
+    with sample_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=rows[0].keys(),
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    generation = [x["generation_ms"] for x in rows]
+    prefill = [x["prefill_ms"] for x in rows]
+
+    total_seconds = sum(generation) / 1000.0
+
+    summary = {
+        "run_id": args.run_id,
+        "seed": args.seed,
+        "gpu_name": torch.cuda.get_device_name(0),
+        "warmup_samples": args.warmup,
+        "measured_samples": len(rows),
+
+        "visual_token_num": args.visual_token_num,
+        "layer_list": args.layer_list,
+        "image_token_list": args.image_token_list,
+        "basis_token_num": args.basis_token_num,
+
+        "generation_mean_ms":
+            statistics.mean(generation),
+        "generation_std_ms":
+            statistics.stdev(generation),
+        "generation_median_ms":
+            statistics.median(generation),
+        "generation_p95_ms":
+            percentile(generation, 0.95),
+
+        "prefill_mean_ms":
+            statistics.mean(prefill),
+        "prefill_std_ms":
+            statistics.stdev(prefill),
+        "prefill_median_ms":
+            statistics.median(prefill),
+        "prefill_p95_ms":
+            percentile(prefill, 0.95),
+
+        "total_generation_seconds":
+            total_seconds,
+
+        "throughput_samples_per_s":
+            len(rows) / total_seconds,
+
+        "peak_allocated_gb":
+            max(x["peak_allocated_gb"] for x in rows),
+
+        "peak_reserved_gb":
+            max(x["peak_reserved_gb"] for x in rows),
+
+        "dynamic_peak_allocated_gb":
+            max(
+                x["dynamic_peak_allocated_gb"]
+                for x in rows
+            ),
+
+        "dynamic_peak_reserved_gb":
+            max(
+                x["dynamic_peak_reserved_gb"]
+                for x in rows
+            ),
+    }
+
+    summary_json = Path(
+        str(output_prefix) + "_summary.json"
+    )
+
+    with summary_json.open("w") as f:
+        json.dump(
+            summary,
+            f,
+            indent=2,
+        )
+
+    print("\n==============================")
+    print("EFFICIENCY SUMMARY")
+    print("==============================")
+    for k, v in summary.items():
+        print(f"{k}: {v}")
+
+    print("\nSaved:")
+    print(sample_csv)
+    print(summary_json)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--model-path", required=True)
+    parser.add_argument("--model-base", default=None)
+
+    parser.add_argument("--question-file", required=True)
+    parser.add_argument("--image-folder", required=True)
+
+    parser.add_argument("--output-prefix", required=True)
+
+    parser.add_argument("--conv-mode", default="vicuna_v1")
+
+    parser.add_argument("--visual-token-num", type=int, default=576)
+    parser.add_argument("--layer-list", type=str, default="None")
+    parser.add_argument("--image-token-list", type=str, default="None")
+    parser.add_argument("--basis-token-num", type=int, default=10)
+    parser.add_argument(
+        "--token-selection-method",
+        type=str,
+        default="apet",
+        choices=["apet", "random_prune"],
+    )
+
+    parser.add_argument("--warmup", type=int, default=20)
+    parser.add_argument("--measure", type=int, default=500)
+
+    parser.add_argument("--max-new-tokens", type=int, default=128)
+    parser.add_argument("--seed", type=int, default=42)
+
+    args = parser.parse_args()
+
+    main(args)
