@@ -42,7 +42,7 @@
   - throughput；
   - GPU memory；
 - 对每个正式效率配置进行 **3 次独立重复实验**；
-- 设计并实现一个 **matched-budget RandomPrune-64 baseline**：与 ApET-64 使用相同的 `96 → 32` token schedule，但直接随机保留 token，不计算 FPS、重构误差、ranking 或 token merging；
+- 设计并实现一个 **matched-budget RandomPrune-64 baseline**：严格复用 ApET-64 的两阶段压缩位置与 token budget，在视觉编码器输出处将 576 个 visual tokens 随机保留为 96 个，并在 LLM 第 16 层进一步随机保留为 32 个；与 ApET 不同，RandomPrune 不使用 FPS、重构误差排序或 token merging，而是直接随机保留 token；
 - 完成 quantitative trade-off、POPE case mining 与 success / failure qualitative analysis。
 
 > **注意：** 本项目的 RandomPrune 与 ApET 论文 Table 5 中的 “Random” 不同。论文中的 Random 只是随机选择 ApET 的 basis tokens；本项目的 RandomPrune 是直接随机保留最终 visual tokens，用于构造更朴素的 matched-budget baseline。
